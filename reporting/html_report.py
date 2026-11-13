@@ -264,7 +264,14 @@ tr:hover { background: var(--bg-hover); }
     {% if host.open_ports %}
     <div class="port-list">
         {% for p in host.open_ports %}
-        <span class="port-tag" title="{{ host.services.get(p, '') }}">{{ p }}/tcp{% if host.services.get(p) %} {{ host.services[p][:15] }}{% endif %}</span>
+        {% set svc = host.services.get(p, '') %}
+        {% if svc is mapping %}
+        <span class="port-tag" title="{{ svc.get('banner', '')[:60] }}">{{ p }}/tcp {{ svc.get('service', '')[:15] }}</span>
+        {% elif svc %}
+        <span class="port-tag" title="{{ svc }}">{{ p }}/tcp {{ svc[:15] }}</span>
+        {% else %}
+        <span class="port-tag">{{ p }}/tcp</span>
+        {% endif %}
         {% endfor %}
     </div>
     {% else %}
@@ -274,7 +281,11 @@ tr:hover { background: var(--bg-hover); }
     <div class="traceroute-hops">
         <strong>Traceroute ({{ host.hop_count }} hops):</strong>
         {% for hop in host.traceroute %}
+        {% if hop is mapping %}
+        <div class="hop"><span style="color:var(--accent)">{{ hop.get('hop', loop.index) }}.</span> {{ hop.get('ip', '???') }} {% if hop.get('hostname') %}({{ hop.hostname }}){% endif %} <span style="color:var(--text-dim)">{{ hop.get('rtt', '') }}ms</span></div>
+        {% else %}
         <div class="hop"><span style="color:var(--accent)">{{ loop.index }}.</span> {{ hop }}</div>
+        {% endif %}
         {% endfor %}
     </div>
     {% endif %}
