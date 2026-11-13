@@ -1,0 +1,66 @@
+# VLAN Segmentation Audit Toolkit - Sample Configuration
+# Customize this file for your environment
+
+# Source VLAN - where the audit tool is running from
+source_vlan:
+  name: "User VLAN"
+  vlan_id: 10
+  subnet: "10.10.10.0/24"
+  gateway: "10.10.10.1"
+
+# Target VLANs to test reachability against
+targets:
+  - name: "Server VLAN"
+    vlan_id: 20
+    ranges:
+      - "10.20.20.0/24"
+    critical_hosts:
+      - ip: "10.20.20.10"
+        role: "Database Server (MSSQL)"
+      - ip: "10.20.20.5"
+        role: "File Server"
+      - ip: "10.20.20.20"
+        role: "Application Server"
+
+  - name: "Management VLAN"
+    vlan_id: 99
+    ranges:
+      - "10.99.99.0/24"
+    critical_hosts:
+      - ip: "10.99.99.1"
+        role: "Core Switch"
+      - ip: "10.99.99.2"
+        role: "Firewall"
+
+  - name: "DMZ"
+    vlan_id: 50
+    ranges:
+      - "172.16.50.0/24"
+    critical_hosts:
+      - ip: "172.16.50.10"
+        role: "Web Server"
+      - ip: "172.16.50.20"
+        role: "Mail Server"
+
+  - name: "PCI Zone"
+    vlan_id: 100
+    ranges:
+      - "10.100.0.0/24"
+    critical_hosts:
+      - ip: "10.100.0.10"
+        role: "POS Terminal Gateway"
+      - ip: "10.100.0.20"
+        role: "Payment Processing Server"
+
+  - name: "IoT/OT VLAN"
+    vlan_id: 200
+    ranges:
+      - "10.200.0.0/24"
+
+# Ports to scan (override defaults)
+ports:
+  tcp: [21, 22, 23, 25, 53, 80, 88, 110, 111, 135, 139, 143, 161, 389, 443, 445, 465, 500, 502, 587, 636, 993, 995, 1433, 1434, 1521, 2049, 3306, 3389, 4443, 5432, 5900, 5985, 5986, 6379, 8080, 8443, 9090, 9200, 27017]
+  udp: [53, 67, 68, 69, 123, 161, 162, 514, 1194, 1434]
+
+# Scan speed: stealth, slow, medium, fast, insane
+scan_speed: "medium"

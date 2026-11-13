@@ -1,0 +1,68 @@
+# VLAN Segmentation Policy
+# Defines what SHOULD be allowed and denied between VLANs
+# The tool compares actual scan results against this policy
+
+policy_name: "Corporate Network Segmentation Policy"
+policy_version: "1.0"
+last_updated: "2026-11-13"
+
+rules:
+  # User VLAN -> Server VLAN: only web traffic
+  - src_vlan: "User VLAN"
+    dst_vlan: "Server VLAN"
+    action: "allow"
+    ports: [80, 443, 8080, 8443]
+    description: "Users may access web services on server VLAN"
+
+  - src_vlan: "User VLAN"
+    dst_vlan: "Server VLAN"
+    action: "deny"
+    ports: [22, 23, 135, 139, 445, 1433, 3306, 3389, 5432, 5900]
+    description: "Users must not access management or database ports on server VLAN"
+
+  # User VLAN -> Management VLAN: fully blocked
+  - src_vlan: "User VLAN"
+    dst_vlan: "Management VLAN"
+    action: "deny"
+    ports: "all"
+    description: "Users must never reach the management VLAN"
+
+  # User VLAN -> DMZ: web only
+  - src_vlan: "User VLAN"
+    dst_vlan: "DMZ"
+    action: "allow"
+    ports: [80, 443]
+    description: "Users may access public-facing web services"
+
+  - src_vlan: "User VLAN"
+    dst_vlan: "DMZ"
+    action: "deny"
+    ports: [22, 25, 3306, 5432]
+    description: "Users must not access backend services in DMZ"
+
+  # User VLAN -> PCI Zone: fully blocked
+  - src_vlan: "User VLAN"
+    dst_vlan: "PCI Zone"
+    action: "deny"
+    ports: "all"
+    description: "PCI zone must be isolated from user VLAN (PCI-DSS requirement)"
+
+  # User VLAN -> IoT/OT: fully blocked
+  - src_vlan: "User VLAN"
+    dst_vlan: "IoT/OT VLAN"
+    action: "deny"
+    ports: "all"
+    description: "IoT/OT network must be fully isolated"
+
+  # DMZ -> Server VLAN: limited backend access
+  - src_vlan: "DMZ"
+    dst_vlan: "Server VLAN"
+    action: "allow"
+    ports: [1433, 3306, 5432]
+    description: "DMZ web servers may access backend databases"
+
+  - src_vlan: "DMZ"
+    dst_vlan: "Server VLAN"
+    action: "deny"
+    ports: [22, 23, 135, 139, 445, 3389, 5900]
+    description: "DMZ must not have management access to servers"

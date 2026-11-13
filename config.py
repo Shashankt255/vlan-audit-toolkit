@@ -1,0 +1,136 @@
+TOOL_NAME = "VLAN Segmentation Audit Toolkit"
+TOOL_VERSION = "1.0.0"
+TOOL_AUTHOR = "Shashankt255"
+
+SEVERITY_CRITICAL = "CRITICAL"
+SEVERITY_HIGH = "HIGH"
+SEVERITY_MEDIUM = "MEDIUM"
+SEVERITY_LOW = "LOW"
+SEVERITY_INFO = "INFO"
+
+STATUS_OPEN = "OPEN"
+STATUS_CLOSED = "CLOSED"
+STATUS_FILTERED = "FILTERED"
+STATUS_PASS = "PASS"
+STATUS_FAIL = "FAIL"
+STATUS_WARN = "WARN"
+STATUS_INFO = "INFO"
+STATUS_ERROR = "ERROR"
+STATUS_SKIP = "SKIP"
+
+SCAN_SPEED = {
+    "stealth": {"pps": 10, "timeout": 3, "delay": 0.1},
+    "slow": {"pps": 50, "timeout": 2, "delay": 0.02},
+    "medium": {"pps": 200, "timeout": 1.5, "delay": 0.005},
+    "fast": {"pps": 500, "timeout": 1, "delay": 0.002},
+    "insane": {"pps": 1000, "timeout": 0.5, "delay": 0.001},
+}
+
+TOP_100_TCP_PORTS = [
+    7, 20, 21, 22, 23, 25, 43, 53, 67, 68, 69, 79, 80, 88, 110, 111,
+    113, 119, 123, 135, 137, 138, 139, 143, 161, 162, 179, 194, 201,
+    264, 389, 443, 445, 464, 465, 500, 502, 512, 513, 514, 515, 520,
+    523, 530, 543, 544, 548, 554, 587, 593, 623, 625, 631, 636, 771,
+    873, 902, 993, 995, 1025, 1080, 1099, 1194, 1214, 1241, 1311,
+    1433, 1434, 1521, 1720, 1723, 1883, 1900, 2049, 2082, 2083, 2181,
+    2222, 2375, 2376, 3000, 3128, 3268, 3269, 3306, 3389, 3690, 4443,
+    4444, 4848, 5000, 5432, 5555, 5672, 5900, 5985, 5986, 6379, 6443,
+    6667, 7001, 7077, 8000, 8008, 8009, 8080, 8081, 8082, 8088, 8443,
+    8444, 8888, 9000, 9001, 9042, 9090, 9091, 9100, 9200, 9300, 9418,
+    9443, 9999, 10000, 11211, 27017, 27018, 50000,
+]
+
+TOP_UDP_PORTS = [
+    53, 67, 68, 69, 88, 123, 137, 138, 161, 162, 389, 443, 464, 500,
+    514, 520, 623, 1194, 1434, 1604, 1900, 2049, 3283, 3478, 4500,
+    5060, 5353, 6343, 10161, 10162, 49152,
+]
+
+CRITICAL_PORTS = {
+    22: ("SSH", SEVERITY_HIGH),
+    23: ("Telnet", SEVERITY_CRITICAL),
+    25: ("SMTP", SEVERITY_MEDIUM),
+    53: ("DNS", SEVERITY_MEDIUM),
+    80: ("HTTP", SEVERITY_MEDIUM),
+    88: ("Kerberos", SEVERITY_HIGH),
+    110: ("POP3", SEVERITY_MEDIUM),
+    135: ("MSRPC", SEVERITY_HIGH),
+    139: ("NetBIOS-SSN", SEVERITY_HIGH),
+    143: ("IMAP", SEVERITY_MEDIUM),
+    161: ("SNMP", SEVERITY_CRITICAL),
+    162: ("SNMP-Trap", SEVERITY_HIGH),
+    389: ("LDAP", SEVERITY_HIGH),
+    443: ("HTTPS", SEVERITY_LOW),
+    445: ("SMB", SEVERITY_CRITICAL),
+    464: ("Kerberos-ChangePass", SEVERITY_HIGH),
+    502: ("Modbus", SEVERITY_CRITICAL),
+    523: ("IBM-DB2", SEVERITY_HIGH),
+    636: ("LDAPS", SEVERITY_MEDIUM),
+    1433: ("MSSQL", SEVERITY_CRITICAL),
+    1434: ("MSSQL-Browser", SEVERITY_HIGH),
+    1521: ("Oracle-DB", SEVERITY_CRITICAL),
+    2049: ("NFS", SEVERITY_HIGH),
+    2375: ("Docker-API", SEVERITY_CRITICAL),
+    2376: ("Docker-TLS", SEVERITY_HIGH),
+    3268: ("LDAP-GC", SEVERITY_HIGH),
+    3306: ("MySQL", SEVERITY_CRITICAL),
+    3389: ("RDP", SEVERITY_CRITICAL),
+    4443: ("HTTPS-Alt", SEVERITY_LOW),
+    4848: ("GlassFish", SEVERITY_HIGH),
+    5432: ("PostgreSQL", SEVERITY_CRITICAL),
+    5555: ("ADB", SEVERITY_CRITICAL),
+    5672: ("AMQP", SEVERITY_HIGH),
+    5900: ("VNC", SEVERITY_CRITICAL),
+    5985: ("WinRM-HTTP", SEVERITY_HIGH),
+    5986: ("WinRM-HTTPS", SEVERITY_HIGH),
+    6379: ("Redis", SEVERITY_CRITICAL),
+    6443: ("Kubernetes-API", SEVERITY_CRITICAL),
+    7001: ("WebLogic", SEVERITY_HIGH),
+    8080: ("HTTP-Proxy", SEVERITY_MEDIUM),
+    8443: ("HTTPS-Alt", SEVERITY_LOW),
+    9090: ("Management", SEVERITY_HIGH),
+    9200: ("Elasticsearch", SEVERITY_CRITICAL),
+    10000: ("Webmin", SEVERITY_HIGH),
+    11211: ("Memcached", SEVERITY_CRITICAL),
+    27017: ("MongoDB", SEVERITY_CRITICAL),
+    50000: ("SAP", SEVERITY_CRITICAL),
+}
+
+MANAGEMENT_PORTS = [22, 23, 80, 161, 443, 830, 8080, 8443, 9090, 10000]
+
+TTL_OS_MAP = {
+    (0, 32): "Possibly embedded/IoT",
+    (33, 64): "Linux/Unix/macOS",
+    (65, 128): "Windows",
+    (129, 255): "Network device (router/switch/firewall)",
+}
+
+SERVICE_BANNERS = {
+    21: "FTP",
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
+    80: "HTTP",
+    110: "POP3",
+    143: "IMAP",
+    443: "HTTPS",
+    445: "SMB",
+    1433: "MSSQL",
+    3306: "MySQL",
+    3389: "RDP",
+    5432: "PostgreSQL",
+    5900: "VNC",
+    6379: "Redis",
+    8080: "HTTP-Alt",
+    8443: "HTTPS-Alt",
+    9200: "Elasticsearch",
+    27017: "MongoDB",
+}
+
+RISK_WEIGHTS = {
+    "CRITICAL": 10,
+    "HIGH": 7,
+    "MEDIUM": 4,
+    "LOW": 1,
+    "INFO": 0,
+}
