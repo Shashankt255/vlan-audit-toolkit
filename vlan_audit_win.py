@@ -44,11 +44,12 @@ def get_ttl(ip):
     try:
         result = subprocess.run(
             ["ping", "-n", "1", "-w", "1000", str(ip)],
-            capture_output=True, text=True, timeout=3
+            capture_output=True, text=True, timeout=5
         )
         for line in result.stdout.split("\n"):
-            if "TTL=" in line:
-                ttl = int(line.split("TTL=")[1].strip())
+            if "TTL=" in line.upper():
+                ttl_part = line.upper().split("TTL=")[1].split()[0].strip()
+                ttl = int(ttl_part)
                 if ttl <= 64:
                     return ttl, "Linux/Unix"
                 elif ttl <= 128:
@@ -56,22 +57,29 @@ def get_ttl(ip):
                 else:
                     return ttl, "Network Device"
         return None, "Unknown"
-    except:
+    except Exception:
         return None, "Unknown"
 
 
 def scan_port(ip, port, timeout=1):
+    sock = None
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
         result = sock.connect_ex((str(ip), port))
-        sock.close()
         return result == 0
-    except:
+    except Exception:
         return False
+    finally:
+        if sock:
+            try:
+                sock.close()
+            except Exception:
+                pass
 
 
 def grab_banner(ip, port, timeout=2):
+    sock = None
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
@@ -81,10 +89,15 @@ def grab_banner(ip, port, timeout=2):
         else:
             sock.send(b"\r\n")
         banner = sock.recv(256).decode("utf-8", errors="replace").strip()
-        sock.close()
         return banner[:200] if banner else None
-    except:
+    except Exception:
         return None
+    finally:
+        if sock:
+            try:
+                sock.close()
+            except Exception:
+                pass
 
 
 def traceroute(ip, max_hops=15):
