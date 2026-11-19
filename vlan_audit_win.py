@@ -326,6 +326,76 @@ class VLANAuditWin:
                                  f"Route: {' -> '.join(hops)}",
                                  "Verify routing path is as expected.")
 
+        self.phase_traceroute(source_net)
+
+    def phase_traceroute(self, source_net=None):
+        print(f"\n[Phase 3b] Traceroute Analysis")
+        self.traceroute_results = []
+
+        targets = []
+        if self.gateway:
+            targets.append(self.gateway)
+        for host in self.hosts:
+            if host["ip"] not in targets:
+                targets.append(host["ip"])
+
+        if len(targets) > 20:
+            self.log(f"Limiting traceroute to first 20 of {len(targets)} targets")
+            targets = targets[:20]
+
+        self.log(f"Running traceroute to {len(targets)} targets...")
+
+        for ip in targets:
+            if self.verbose:
+                self.log(f"Traceroute to {ip}...")
+            hops = traceroute(ip, max_hops=15)
+            hop_count = len(hops)
+            l3_devices = []
+            for h in hops:
+                if h != ip:
+                    try:
+                        hop_net = str(ipaddress.ip_network(f"{h}/24", strict=False))
+                    except Exception:
+                        hop_net = "unknown"
+                    l3_devices.append({"ip": h, "subnet": hop_net})
+
+            result = {
+                "target": ip,
+                "hops": hops,
+                "hop_count": hop_count,
+                "l3_devices": l3_devices,
+                "direct": hop_count <= 1
+            }
+            self.traceroute_results.append(result)
+
+            if self.verbose:
+                path = " -> ".join(hops) if hops else "no response"
+                self.log(f"  {ip}: {hop_count} hops [{path}]")
+
+        multi_hop = [r for r in self.traceroute_results if not r["direct"] and r["hop_count"] > 0]
+        direct = [r for r in self.traceroute_results if r["direct"]]
+        no_response = [r for r in self.traceroute_results if r["hop_count"] == 0]
+
+        if multi_hop:
+            details = [f"{r['target']} ({r['hop_count']} hops)" for r in multi_hop[:10]]
+            self.add_finding("TR-01", f"Multi-Hop Routes: {len(multi_hop)} targets behind routers",
+                             "MEDIUM" if len(multi_hop) > 3 else "INFO",
+                             f"Targets behind L3 devices: {'; '.join(details)}",
+                             "Verify that inter-VLAN routing is intentional and ACLs are in place.")
+
+        unique_l3 = set()
+        for r in self.traceroute_results:
+            for dev in r["l3_devices"]:
+                unique_l3.add(dev["ip"])
+
+        if unique_l3:
+            self.add_finding("TR-02", f"L3 Devices Identified: {len(unique_l3)} routers/firewalls in path",
+                             "INFO",
+                             f"Intermediate devices: {', '.join(sorted(unique_l3)[:15])}",
+                             "Confirm these are expected network devices with proper ACL configurations.")
+
+        self.log(f"Traceroute complete: {len(direct)} direct, {len(multi_hop)} routed, {len(no_response)} no response")
+
     def phase_service_analysis(self):
         print("\n[Phase 4] Service Analysis")
         mgmt_services = []
@@ -427,7 +497,8 @@ class VLANAuditWin:
                 "total_open_ports": sum(len(h["open_ports"]) for h in self.hosts)
             },
             "findings": self.findings,
-            "hosts": self.hosts
+            "hosts": self.hosts,
+            "traceroute": getattr(self, "traceroute_results", [])
         }
         return report
 
@@ -460,6 +531,36 @@ def generate_html(report, output_path):
             <td>{len(h['open_ports'])}</td>
             <td style="font-size:12px;">{ports_str}</td>
         </tr>"""
+
+    traceroute_html = ""
+    tr_data = report.get("traceroute", [])
+    if tr_data:
+        traceroute_html += """<table>
+        <tr><th>Target</th><th>Hops</th><th>Route Path</th><th>L3 Devices</th><th>Type</th></tr>"""
+        for tr in tr_data:
+            path = " &rarr; ".join(tr["hops"]) if tr["hops"] else "<em>No response</em>"
+            l3 = ", ".join([d["ip"] for d in tr.get("l3_devices", [])]) or "—"
+            rtype = "Direct (same VLAN)" if tr.get("direct") else f"Routed ({tr['hop_count']} hops)"
+            rcolor = "#059669" if tr.get("direct") else "#dc2626"
+            traceroute_html += f"""
+            <tr>
+                <td><strong>{tr['target']}</strong></td>
+                <td style="text-align:center;">{tr['hop_count']}</td>
+                <td style="font-size:12px;font-family:monospace;">{path}</td>
+                <td style="font-size:12px;">{l3}</td>
+                <td><span style="color:{rcolor};font-weight:bold;">{rtype}</span></td>
+            </tr>"""
+        traceroute_html += "</table>"
+
+        direct_count = sum(1 for t in tr_data if t.get("direct"))
+        routed_count = sum(1 for t in tr_data if not t.get("direct") and t["hop_count"] > 0)
+        no_resp = sum(1 for t in tr_data if t["hop_count"] == 0)
+        traceroute_html += f"""
+        <p style="margin-top:12px;color:#374151;">
+            <strong>Summary:</strong> {direct_count} direct (same VLAN) | {routed_count} routed (cross-VLAN) | {no_resp} no response
+        </p>"""
+    else:
+        traceroute_html = "<p><em>No traceroute data collected.</em></p>"
 
     info = report["scan_info"]
     summary = report["summary"]
@@ -501,6 +602,9 @@ tr:nth-child(even){{background:#f3f4f6;}}
 <tr><th>IP</th><th>Hostname</th><th>OS Guess</th><th>Open Ports</th><th>Services</th></tr>
 {hosts_html}
 </table>
+
+<h2>Traceroute Analysis</h2>
+{traceroute_html}
 
 <h2>Scan Configuration</h2>
 <p>Ports scanned: {info['ports_scanned']} | Speed: {info['speed']}</p>
