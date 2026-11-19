@@ -16,17 +16,68 @@ import concurrent.futures
 from datetime import datetime
 
 COMMON_PORTS = {
-    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS",
-    80: "HTTP", 110: "POP3", 111: "RPCbind", 135: "MSRPC", 139: "NetBIOS",
-    143: "IMAP", 161: "SNMP", 389: "LDAP", 443: "HTTPS", 445: "SMB",
-    636: "LDAPS", 993: "IMAPS", 995: "POP3S", 1433: "MSSQL", 1521: "Oracle",
-    3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL", 5900: "VNC",
-    6379: "Redis", 8080: "HTTP-Alt", 8443: "HTTPS-Alt", 8888: "HTTP-Alt2",
-    9090: "WebConsole", 27017: "MongoDB"
+    7: "Echo", 20: "FTP-Data", 21: "FTP", 22: "SSH", 23: "Telnet",
+    25: "SMTP", 37: "Time", 43: "WHOIS", 49: "TACACS", 53: "DNS",
+    67: "DHCP-Server", 68: "DHCP-Client", 69: "TFTP", 79: "Finger",
+    80: "HTTP", 88: "Kerberos", 102: "ISO-TSAP", 110: "POP3",
+    111: "RPCbind", 113: "Ident", 119: "NNTP", 123: "NTP",
+    135: "MSRPC", 137: "NetBIOS-NS", 138: "NetBIOS-DGM", 139: "NetBIOS-SSN",
+    143: "IMAP", 161: "SNMP", 162: "SNMP-Trap", 179: "BGP",
+    194: "IRC", 201: "AppleTalk", 264: "BGMP", 389: "LDAP",
+    443: "HTTPS", 445: "SMB", 465: "SMTPS", 500: "IKE",
+    502: "Modbus", 512: "Rexec", 513: "Rlogin", 514: "Syslog",
+    515: "LPD", 520: "RIP", 523: "IBM-DB2", 540: "UUCP",
+    548: "AFP", 554: "RTSP", 587: "SMTP-Submit", 593: "HTTP-RPC",
+    623: "IPMI", 631: "IPP/CUPS", 636: "LDAPS", 666: "Doom",
+    749: "Kerberos-Admin", 873: "Rsync", 902: "VMware",
+    993: "IMAPS", 995: "POP3S", 1080: "SOCKS", 1099: "RMI",
+    1194: "OpenVPN", 1433: "MSSQL", 1434: "MSSQL-UDP", 1521: "Oracle",
+    1723: "PPTP", 1883: "MQTT", 2049: "NFS", 2082: "cPanel",
+    2083: "cPanel-SSL", 2181: "ZooKeeper", 2222: "SSH-Alt",
+    2375: "Docker", 2376: "Docker-TLS", 2483: "Oracle-TLS",
+    3000: "Grafana/Dev", 3268: "LDAP-GC", 3269: "LDAP-GC-SSL",
+    3306: "MySQL", 3389: "RDP", 3690: "SVN",
+    4443: "HTTPS-Alt", 4444: "Metasploit", 4505: "SaltStack",
+    4506: "SaltStack", 4848: "GlassFish", 5000: "Flask/UPnP",
+    5060: "SIP", 5222: "XMPP", 5432: "PostgreSQL",
+    5555: "ADB", 5601: "Kibana", 5672: "AMQP/RabbitMQ",
+    5900: "VNC", 5984: "CouchDB", 5985: "WinRM-HTTP", 5986: "WinRM-HTTPS",
+    6379: "Redis", 6443: "Kubernetes-API", 6667: "IRC",
+    7001: "WebLogic", 7071: "Zimbra", 7474: "Neo4j",
+    8000: "HTTP-Alt", 8008: "HTTP-Alt", 8080: "HTTP-Proxy",
+    8081: "HTTP-Alt", 8088: "HTTP-Alt", 8161: "ActiveMQ",
+    8443: "HTTPS-Alt", 8500: "Consul", 8834: "Nessus",
+    8888: "HTTP-Alt", 9000: "SonarQube", 9042: "Cassandra",
+    9090: "Prometheus", 9100: "Printer-JetDirect", 9200: "Elasticsearch",
+    9300: "Elasticsearch", 9418: "Git", 9443: "HTTPS-Alt",
+    10000: "Webmin", 10250: "Kubelet", 10443: "HTTPS-Alt",
+    11211: "Memcached", 15672: "RabbitMQ-Mgmt", 25565: "Minecraft",
+    27017: "MongoDB", 27018: "MongoDB", 28017: "MongoDB-Web",
+    47001: "WinRM", 49152: "WinRPC-Dynamic", 50000: "SAP",
 }
 
-HIGH_RISK_PORTS = {21, 23, 135, 139, 161, 445, 1433, 3306, 3389, 5432, 5900, 6379, 27017}
-CRITICAL_SERVICES = {23: "Telnet (cleartext)", 21: "FTP (cleartext)", 161: "SNMP (community strings)"}
+HIGH_RISK_PORTS = {
+    21, 23, 69, 79, 111, 135, 139, 161, 445, 502, 512, 513, 514, 523, 623,
+    1099, 1433, 1434, 1521, 2049, 2375, 3306, 3389, 4444, 4505, 4506,
+    5432, 5555, 5900, 5984, 5985, 6379, 6443, 7001, 8834, 9042, 9200,
+    10250, 11211, 27017, 50000
+}
+CRITICAL_SERVICES = {
+    23: "Telnet (cleartext auth)",
+    21: "FTP (cleartext auth)",
+    69: "TFTP (no auth, file access)",
+    79: "Finger (user enumeration)",
+    161: "SNMP (community string auth)",
+    512: "Rexec (cleartext)",
+    513: "Rlogin (cleartext)",
+    514: "Syslog (unauth log injection)",
+    502: "Modbus (no auth, ICS/SCADA)",
+    623: "IPMI (hash disclosure)",
+    2375: "Docker API (unauthenticated)",
+    6379: "Redis (default no auth)",
+    11211: "Memcached (no auth)",
+    10250: "Kubelet (node access)",
+}
 
 
 def ping_host(ip, timeout=1):
@@ -76,6 +127,51 @@ def scan_port(ip, port, timeout=1):
                 sock.close()
             except Exception:
                 pass
+
+
+def identify_service(banner, port):
+    b = banner.lower()
+    if "ssh" in b:
+        return "SSH"
+    elif "http" in b or "html" in b or "server:" in b:
+        return "HTTP" if port != 443 else "HTTPS"
+    elif "ftp" in b:
+        return "FTP"
+    elif "smtp" in b or "mail" in b or "postfix" in b:
+        return "SMTP"
+    elif "mysql" in b or "mariadb" in b:
+        return "MySQL"
+    elif "postgresql" in b:
+        return "PostgreSQL"
+    elif "microsoft" in b and "sql" in b:
+        return "MSSQL"
+    elif "redis" in b:
+        return "Redis"
+    elif "mongodb" in b:
+        return "MongoDB"
+    elif "vnc" in b or "rfb" in b:
+        return "VNC"
+    elif "imap" in b:
+        return "IMAP"
+    elif "pop" in b:
+        return "POP3"
+    elif "ldap" in b:
+        return "LDAP"
+    elif "smb" in b or "samba" in b:
+        return "SMB"
+    elif "rabbitmq" in b or "amqp" in b:
+        return "AMQP"
+    elif "elastic" in b:
+        return "Elasticsearch"
+    elif "apache" in b:
+        return "Apache"
+    elif "nginx" in b:
+        return "Nginx"
+    elif "iis" in b:
+        return "IIS"
+    elif "openssl" in b or "tls" in b:
+        return "TLS-Service"
+    return f"port-{port}"
 
 
 def grab_banner(ip, port, timeout=2):
@@ -247,13 +343,15 @@ class VLANAuditWin:
                     port = future_map[future]
                     try:
                         if future.result():
-                            svc = COMMON_PORTS.get(port, "unknown")
-                            host["open_ports"].append({"port": port, "service": svc})
-                            total_open += 1
-
+                            svc = COMMON_PORTS.get(port, f"port-{port}")
                             banner = grab_banner(ip, port)
                             if banner:
                                 host["banners"][port] = banner
+                                if svc == f"port-{port}":
+                                    svc = identify_service(banner, port)
+
+                            host["open_ports"].append({"port": port, "service": svc, "banner": banner or ""})
+                            total_open += 1
 
                             if port in CRITICAL_SERVICES:
                                 critical_found.append(f"{ip}:{port} ({CRITICAL_SERVICES[port]})")
@@ -263,7 +361,7 @@ class VLANAuditWin:
                             if self.verbose:
                                 b = f" [{banner[:60]}]" if banner else ""
                                 self.log(f"  OPEN: {ip}:{port} ({svc}){b}")
-                    except:
+                    except Exception:
                         pass
 
         self.add_finding("PORT-01", f"Port Scan Summary: {total_open} open ports across {len(self.hosts)} hosts",
@@ -578,8 +676,8 @@ def generate_html(report, output_path):
 
     hosts_html = ""
     for h in report["hosts"]:
-        ports_str = ", ".join([f"{p['port']}/{p['service']}" for p in h["open_ports"]]) or "None"
-        banner_str = "<br>".join([f"Port {k}: {v[:80]}" for k, v in h.get("banners", {}).items()]) or "—"
+        ports_str = ", ".join([f"{p['port']}/{p['service']}" for p in sorted(h["open_ports"], key=lambda x: x["port"])]) or "None"
+        banner_str = "<br>".join([f"<strong>{k}:</strong> {v[:100]}" for k, v in sorted(h.get("banners", {}).items())]) or "—"
         hosts_html += f"""
         <tr>
             <td>{h['ip']}</td>
@@ -587,6 +685,7 @@ def generate_html(report, output_path):
             <td>{h.get('os_guess', '—')}</td>
             <td>{len(h['open_ports'])}</td>
             <td style="font-size:12px;">{ports_str}</td>
+            <td style="font-size:11px;font-family:monospace;">{banner_str}</td>
         </tr>"""
 
     traceroute_html = ""
@@ -681,7 +780,7 @@ tr:nth-child(even){{background:#f3f4f6;}}
 
 <h2>Host Inventory</h2>
 <table>
-<tr><th>IP</th><th>Hostname</th><th>OS Guess</th><th>Open Ports</th><th>Services</th></tr>
+<tr><th>IP</th><th>Hostname</th><th>OS Guess</th><th>Open Ports</th><th>Services</th><th>Service Banners / Versions</th></tr>
 {hosts_html}
 </table>
 
@@ -702,7 +801,8 @@ def main():
     parser = argparse.ArgumentParser(description="VLAN Segmentation Audit - Windows Compatible")
     parser.add_argument("-t", "--targets", required=True, help="Target subnets (comma-separated, e.g. 172.17.5.0/24,10.0.1.0/24)")
     parser.add_argument("-g", "--gateway", required=True, help="Gateway IP")
-    parser.add_argument("-p", "--ports", default="common", help="Ports: common (default), top10, all, or comma-separated list")
+    parser.add_argument("-p", "--ports", default="common",
+                        help="Ports: common (130+ key ports), top10, top1000 (common + 1-1024), all (1-65535), or comma-separated list")
     parser.add_argument("-s", "--speed", default="medium", choices=["fast", "medium", "slow"])
     parser.add_argument("-o", "--output", default="vlan_audit_report.html", help="HTML report path")
     parser.add_argument("--json-output", help="JSON report path")
@@ -712,11 +812,13 @@ def main():
     targets = [t.strip() for t in args.targets.split(",")]
 
     if args.ports == "common":
-        ports = list(COMMON_PORTS.keys())
+        ports = sorted(COMMON_PORTS.keys())
     elif args.ports == "top10":
         ports = [22, 23, 80, 135, 139, 443, 445, 3389, 8080, 3306]
+    elif args.ports == "top1000":
+        ports = sorted(set(list(COMMON_PORTS.keys()) + list(range(1, 1025))))
     elif args.ports == "all":
-        ports = list(range(1, 1025))
+        ports = list(range(1, 65536))
     else:
         ports = [int(p.strip()) for p in args.ports.split(",")]
 
