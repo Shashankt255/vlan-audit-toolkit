@@ -351,19 +351,31 @@ class VLANAuditWin:
             hops = traceroute(ip, max_hops=15)
             hop_count = len(hops)
             l3_devices = []
+            subnets_crossed = set()
             for h in hops:
+                try:
+                    hop_net = str(ipaddress.ip_network(f"{h}/24", strict=False))
+                except Exception:
+                    hop_net = "unknown"
+                subnets_crossed.add(hop_net)
                 if h != ip:
-                    try:
-                        hop_net = str(ipaddress.ip_network(f"{h}/24", strict=False))
-                    except Exception:
-                        hop_net = "unknown"
-                    l3_devices.append({"ip": h, "subnet": hop_net})
+                    hostname = resolve_hostname(h)
+                    l3_devices.append({
+                        "ip": h,
+                        "subnet": hop_net,
+                        "hostname": hostname if hostname != h else None
+                    })
+
+            if source_net:
+                subnets_crossed.add(source_net)
+            subnets_crossed.discard("unknown")
 
             result = {
                 "target": ip,
                 "hops": hops,
                 "hop_count": hop_count,
                 "l3_devices": l3_devices,
+                "subnets_crossed": sorted(subnets_crossed),
                 "direct": hop_count <= 1
             }
             self.traceroute_results.append(result)
@@ -377,22 +389,67 @@ class VLANAuditWin:
         no_response = [r for r in self.traceroute_results if r["hop_count"] == 0]
 
         if multi_hop:
-            details = [f"{r['target']} ({r['hop_count']} hops)" for r in multi_hop[:10]]
-            self.add_finding("TR-01", f"Multi-Hop Routes: {len(multi_hop)} targets behind routers",
-                             "MEDIUM" if len(multi_hop) > 3 else "INFO",
-                             f"Targets behind L3 devices: {'; '.join(details)}",
-                             "Verify that inter-VLAN routing is intentional and ACLs are in place.")
+            for r in multi_hop:
+                routers = [f"{d['ip']} ({d['subnet']})" for d in r["l3_devices"]]
+                subnets = r.get("subnets_crossed", [])
+                self.add_finding(
+                    "TR-01",
+                    f"Cross-VLAN Route to {r['target']}: {r['hop_count']} hops, {len(subnets)} subnets",
+                    "HIGH" if len(subnets) > 2 else "MEDIUM",
+                    f"Target {r['target']} is {r['hop_count']} hops away. "
+                    f"Route: {' -> '.join(r['hops'])}. "
+                    f"Subnets traversed: {', '.join(subnets)}. "
+                    f"L3 devices in path: {'; '.join(routers) if routers else 'none identified'}.",
+                    f"ACTION REQUIRED: Review ACLs on the routing devices ({', '.join([d['ip'] for d in r['l3_devices']]) or 'gateway'}). "
+                    f"If {r['target']} should not be reachable from {source_net or 'this VLAN'}, "
+                    f"add a deny rule on the inter-VLAN firewall/router for traffic between "
+                    f"{source_net or 'source subnet'} and {r['subnets_crossed'][-1] if r['subnets_crossed'] else 'target subnet'}. "
+                    f"If access is intentional, restrict to only required ports/protocols via ACL."
+                )
 
-        unique_l3 = set()
+        unique_l3 = {}
         for r in self.traceroute_results:
             for dev in r["l3_devices"]:
-                unique_l3.add(dev["ip"])
+                if dev["ip"] not in unique_l3:
+                    unique_l3[dev["ip"]] = {
+                        "subnet": dev["subnet"],
+                        "hostname": dev.get("hostname"),
+                        "routes_through": []
+                    }
+                unique_l3[dev["ip"]]["routes_through"].append(r["target"])
 
         if unique_l3:
-            self.add_finding("TR-02", f"L3 Devices Identified: {len(unique_l3)} routers/firewalls in path",
-                             "INFO",
-                             f"Intermediate devices: {', '.join(sorted(unique_l3)[:15])}",
-                             "Confirm these are expected network devices with proper ACL configurations.")
+            device_details = []
+            for ip, info in sorted(unique_l3.items()):
+                name = f"{ip} ({info['hostname']})" if info.get("hostname") else ip
+                device_details.append(
+                    f"{name} on {info['subnet']} — routes to: {', '.join(info['routes_through'][:5])}"
+                )
+            self.add_finding(
+                "TR-02",
+                f"L3 Routing Devices: {len(unique_l3)} routers/firewalls identified",
+                "INFO",
+                f"The following L3 devices were identified in network paths:\n" +
+                "\n".join(f"  - {d}" for d in device_details[:15]),
+                f"ACTION REQUIRED: For each device listed, verify: "
+                f"(1) ACLs restrict inter-VLAN traffic to only necessary services, "
+                f"(2) management interfaces (SSH/HTTPS) are not exposed to user VLANs, "
+                f"(3) routing between sensitive segments (server/DB VLANs) and user VLANs is filtered. "
+                f"Devices to audit: {', '.join(sorted(unique_l3.keys()))}."
+            )
+
+        if no_response:
+            blocked = [r["target"] for r in no_response]
+            self.add_finding(
+                "TR-03",
+                f"Traceroute Blocked: {len(no_response)} targets did not respond",
+                "INFO",
+                f"No traceroute response from: {', '.join(blocked[:15])}. "
+                f"These hosts may have ICMP/TTL-exceeded responses disabled or a firewall is dropping trace packets.",
+                f"Note: Blocked traceroute may indicate a firewall is filtering ICMP. "
+                f"This is generally positive from a security standpoint but verify these hosts "
+                f"are still reachable on required service ports."
+            )
 
         self.log(f"Traceroute complete: {len(direct)} direct, {len(multi_hop)} routed, {len(no_response)} no response")
 
@@ -536,17 +593,30 @@ def generate_html(report, output_path):
     tr_data = report.get("traceroute", [])
     if tr_data:
         traceroute_html += """<table>
-        <tr><th>Target</th><th>Hops</th><th>Route Path</th><th>L3 Devices</th><th>Type</th></tr>"""
+        <tr><th>Target</th><th>Hops</th><th>Route Path</th><th>Subnets Crossed</th><th>L3 Devices</th><th>Type</th></tr>"""
         for tr in tr_data:
             path = " &rarr; ".join(tr["hops"]) if tr["hops"] else "<em>No response</em>"
-            l3 = ", ".join([d["ip"] for d in tr.get("l3_devices", [])]) or "—"
+            l3_parts = []
+            for d in tr.get("l3_devices", []):
+                name = f"{d['ip']}"
+                if d.get("hostname"):
+                    name += f" ({d['hostname']})"
+                name += f" [{d['subnet']}]"
+                l3_parts.append(name)
+            l3 = "<br>".join(l3_parts) or "—"
+            subnets = ", ".join(tr.get("subnets_crossed", [])) or "—"
             rtype = "Direct (same VLAN)" if tr.get("direct") else f"Routed ({tr['hop_count']} hops)"
             rcolor = "#059669" if tr.get("direct") else "#dc2626"
+            hop_count = tr["hop_count"]
+            if hop_count == 0:
+                rtype = "No response"
+                rcolor = "#9ca3af"
             traceroute_html += f"""
             <tr>
                 <td><strong>{tr['target']}</strong></td>
-                <td style="text-align:center;">{tr['hop_count']}</td>
+                <td style="text-align:center;">{hop_count}</td>
                 <td style="font-size:12px;font-family:monospace;">{path}</td>
+                <td style="font-size:12px;">{subnets}</td>
                 <td style="font-size:12px;">{l3}</td>
                 <td><span style="color:{rcolor};font-weight:bold;">{rtype}</span></td>
             </tr>"""
@@ -555,10 +625,22 @@ def generate_html(report, output_path):
         direct_count = sum(1 for t in tr_data if t.get("direct"))
         routed_count = sum(1 for t in tr_data if not t.get("direct") and t["hop_count"] > 0)
         no_resp = sum(1 for t in tr_data if t["hop_count"] == 0)
+        all_subnets = set()
+        all_l3 = set()
+        for t in tr_data:
+            all_subnets.update(t.get("subnets_crossed", []))
+            for d in t.get("l3_devices", []):
+                all_l3.add(d["ip"])
         traceroute_html += f"""
-        <p style="margin-top:12px;color:#374151;">
-            <strong>Summary:</strong> {direct_count} direct (same VLAN) | {routed_count} routed (cross-VLAN) | {no_resp} no response
-        </p>"""
+        <div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:16px;margin:16px 0;">
+            <h3 style="margin:0 0 8px;color:#92400e;">Traceroute Summary</h3>
+            <p><strong>Targets traced:</strong> {len(tr_data)} | <strong>Direct (same VLAN):</strong> {direct_count} |
+            <strong>Routed (cross-VLAN):</strong> <span style="color:#dc2626;font-weight:bold;">{routed_count}</span> |
+            <strong>No response:</strong> {no_resp}</p>
+            <p><strong>Unique subnets observed:</strong> {', '.join(sorted(all_subnets)) or 'None'}</p>
+            <p><strong>L3 devices (routers/firewalls) in paths:</strong> {', '.join(sorted(all_l3)) or 'None identified'}</p>
+            {"<p style='color:#dc2626;font-weight:bold;'>⚠ Cross-VLAN routes detected — review ACLs on listed L3 devices to ensure inter-VLAN traffic is restricted to required services only.</p>" if routed_count > 0 else "<p style='color:#059669;'>✓ All targets are on the same VLAN segment — no unexpected cross-VLAN routing detected.</p>"}
+        </div>"""
     else:
         traceroute_html = "<p><em>No traceroute data collected.</em></p>"
 
