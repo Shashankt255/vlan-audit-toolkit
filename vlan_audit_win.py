@@ -760,6 +760,20 @@ tr:nth-child(even){{background:#f3f4f6;}}
 .summary-card{{background:#f0f9ff;border:1px solid #bfdbfe;border-radius:8px;padding:16px;text-align:center;}}
 .summary-card .num{{font-size:28px;font-weight:bold;color:#1e40af;}}
 .summary-card .label{{font-size:12px;color:#6b7280;text-transform:uppercase;}}
+@media print {{
+    body{{margin:20px;font-size:11px;}}
+    h1{{font-size:20px;}}
+    h2{{font-size:16px;page-break-after:avoid;}}
+    table{{font-size:10px;page-break-inside:auto;}}
+    tr{{page-break-inside:avoid;page-break-after:auto;}}
+    .summary-grid{{page-break-inside:avoid;}}
+    .summary-card .num{{font-size:22px;}}
+    div[style*="border-left"]{{page-break-inside:avoid;}}
+}}
+@page {{
+    size: A4 landscape;
+    margin: 15mm;
+}}
 </style></head><body>
 <h1>VLAN Segmentation Audit Report</h1>
 <p><strong>Date:</strong> {info['timestamp'][:19]} | <strong>Source:</strong> {info['source_ip']} ({info['hostname']})
@@ -805,6 +819,7 @@ def main():
                         help="Ports: common (130+ key ports), top10, top1000 (common + 1-1024), all (1-65535), or comma-separated list")
     parser.add_argument("-s", "--speed", default="medium", choices=["fast", "medium", "slow"])
     parser.add_argument("-o", "--output", default="vlan_audit_report.html", help="HTML report path")
+    parser.add_argument("--pdf-output", help="PDF report path (requires pip install weasyprint, or auto-converts via browser)")
     parser.add_argument("--json-output", help="JSON report path")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
@@ -827,10 +842,84 @@ def main():
 
     generate_html(report, args.output)
 
+    if args.pdf_output:
+        generate_pdf(args.output, args.pdf_output)
+
     if args.json_output:
         with open(args.json_output, "w") as f:
             json.dump(report, f, indent=2)
         print(f"  JSON report: {os.path.abspath(args.json_output)}")
+
+
+def generate_pdf(html_path, pdf_path):
+    html_abs = os.path.abspath(html_path)
+    pdf_abs = os.path.abspath(pdf_path)
+
+    # Method 1: weasyprint (best quality)
+    try:
+        from weasyprint import HTML
+        HTML(filename=html_abs).write_pdf(pdf_abs)
+        print(f"\n  PDF report (weasyprint): {pdf_abs}")
+        return
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"  [!] weasyprint failed: {e}")
+
+    # Method 2: pdfkit / wkhtmltopdf
+    try:
+        import pdfkit
+        pdfkit.from_file(html_abs, pdf_abs)
+        print(f"\n  PDF report (pdfkit): {pdf_abs}")
+        return
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"  [!] pdfkit failed: {e}")
+
+    # Method 3: Chrome/Edge headless (usually available on Windows)
+    for browser in [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        "google-chrome", "chromium-browser", "microsoft-edge",
+    ]:
+        try:
+            result = subprocess.run(
+                [browser, "--headless", "--disable-gpu", "--no-sandbox",
+                 f"--print-to-pdf={pdf_abs}", f"file:///{html_abs.replace(os.sep, '/')}"],
+                capture_output=True, text=True, timeout=30
+            )
+            if os.path.exists(pdf_abs) and os.path.getsize(pdf_abs) > 0:
+                print(f"\n  PDF report (browser): {pdf_abs}")
+                return
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+        except Exception:
+            continue
+
+    # Method 4: Windows COM (Internet Explorer / MSHTML)
+    if sys.platform == "win32":
+        try:
+            import comtypes.client
+            url = f"file:///{html_abs.replace(os.sep, '/')}"
+            print(f"  [*] Attempting PDF via Windows print...")
+            # Use Edge PDF printer via PowerShell
+            ps_cmd = f'''
+            $edge = Start-Process msedge -ArgumentList "--headless --disable-gpu --print-to-pdf=\\"{pdf_abs}\\" \\"{url}\\"" -PassThru -Wait
+            '''
+            subprocess.run(["powershell", "-Command", ps_cmd], timeout=30, capture_output=True)
+            if os.path.exists(pdf_abs) and os.path.getsize(pdf_abs) > 0:
+                print(f"\n  PDF report (Edge): {pdf_abs}")
+                return
+        except Exception:
+            pass
+
+    print(f"\n  [!] Could not generate PDF automatically.")
+    print(f"      Install weasyprint:  pip install weasyprint")
+    print(f"      Or open the HTML report in a browser and use Print > Save as PDF")
+    print(f"      HTML report at: {html_abs}")
 
 
 if __name__ == "__main__":
