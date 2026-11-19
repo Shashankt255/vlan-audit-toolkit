@@ -437,10 +437,6 @@ class VLANAuditWin:
             if host["ip"] not in targets:
                 targets.append(host["ip"])
 
-        if len(targets) > 20:
-            self.log(f"Limiting traceroute to first 20 of {len(targets)} targets")
-            targets = targets[:20]
-
         self.log(f"Running traceroute to {len(targets)} targets...")
 
         for ip in targets:
