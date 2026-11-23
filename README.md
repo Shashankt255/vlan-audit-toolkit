@@ -321,6 +321,13 @@ Always obtain proper written authorization before running this tool. Coordinate 
 
 ---
 
+## Related Tools
+
+| Tool | What it does |
+|---|---|
+| [**GLASSCAGE**](https://github.com/Shashankt255/glasscage) | LLM & agentic AI security assessment — OWASP LLM Top 10 probes, AI Attack Knowledge Graph, evidence-backed reports |
+| [**AD Audit Toolkit**](https://github.com/Shashankt255/ad-audit-toolkit) | Active Directory security assessment — 93 test cases, 15 modules, MITRE ATT&CK mapping, attack path analysis |
+
 ## Author
 
 **Shashankt255** — [GitHub](https://github.com/Shashankt255)
